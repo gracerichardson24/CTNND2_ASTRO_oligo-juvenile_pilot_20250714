@@ -4,6 +4,82 @@ format: html
 ---
 
 ```{r}
-#hwllo
+if(!require(lsmeans)){install.packages("lsmeans")}
+if(!require(multcompView)){install.packages("multcompView")}
+if(!require(dplyr)){install.packages("dplyr")}
+if(!require(rcompanion)){install.packages("rcompanion")}
+if(!require(rcompanion)){install.packages("ggprism")}
+
+library(tidyverse)
+library(stringr)
+library(car)
+library(FSA)
+library(ggpubr)
+library(ggbeeswarm)
+library(ggprism)
+library(ragg)
+
+if(!require(psych)){install.packages("psych")}
+if(!require(FSA)){install.packages("FSA")}
+if(!require(lattice)){install.packages("lattice")}
+if(!require(lsr)){install.packages("lsr")}
+
+```
+
+```{r}
+Measurements_data = read.csv("DATA/20250702_QuPath_OutputImageMeasurements.csv")
+
+Measurements_data$Animal <- gsub(".*_(\\d+)_(\\d+)[A-Z]*_.*", "\\1\\2", Measurements_data$Image)
+
+Measurements_data$sex <- sub(".*_(\\d)([FM])_.*", "\\2", Measurements_data$Image)
+
+Measurements_data$genotype <- sub(".*_(WT|KO)_.*", "\\1", Measurements_data$Image)
+
+# Filter out the specific row by exact match
+Measurements_filtered_data <- Measurements_data[Measurements_data$Image != "MAX_20250715_CTNND2_oligo_juvenile_pilot_55194_8M_WT_s1h1_ASPA488_Pdgfra594_Olig2694_DAPI405_Merged.tif_rotated.tif", ]
+
+```
+
+```{r}
+library(tidyverse)
+library(stringr)
+
+# Load CSV
+Detections_data <- read.csv("DATA/20250722_QuPath_OutputImageDetections.csv")
+
+# Extract animal ID, sex, and genotype
+Detections_data <- Detections_data %>%
+  mutate(
+    Animal = gsub(".*_(\\d+)_(\\d+)[A-Z]*_.*", "\\1\\2", Image),
+    sex = sub(".*_(\\d)([FM])_.*", "\\2", Image),
+    genotype = sub(".*_(WT|KO)_.*", "\\1", Image),
+    slice = str_extract(Image, "s\\d+") %>% str_remove("s") %>% as.integer(),
+    hemisphere = str_extract(Image, "h\\d+") %>% str_remove("h") %>% as.integer(),
+    Pdgfra = str_extract(Classification, "Pdgfra[+-]") %>% str_sub(-1),
+    ASPA = str_extract(Classification, "ASPA[+-]") %>% str_sub(-1)
+  )
+
+# Filter for rows containing "NEWSETTINGS" in Image
+Detections_filtered_data <- Detections_data %>%
+  filter(str_detect(Image, "NEWSETTINGS"))
+
+# Count combinations of Pdgfra and ASPA per slice, hemisphere, and Animal
+Detections_summary <- Detections_filtered_data %>%
+  mutate(
+    combo = case_when(
+      Pdgfra == "+" & ASPA == "+" ~ "Pdgfra_plus_ASPA_plus",
+      Pdgfra == "+" & ASPA == "-" ~ "Pdgfra_plus_ASPA_minus",
+      Pdgfra == "-" & ASPA == "+" ~ "Pdgfra_minus_ASPA_plus",
+      Pdgfra == "-" & ASPA == "-" ~ "Pdgfra_minus_ASPA_minus"
+    )
+  ) %>%
+  group_by(slice, hemisphere, Animal, sex, genotype, combo) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  pivot_wider(names_from = combo, values_from = n, values_fill = 0)
+
+
+```
+
+```{r}
 
 ```
