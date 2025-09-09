@@ -28,6 +28,7 @@ if(!require(lsr)){install.packages("lsr")}
 
 ```{r}
 Measurements_data = read.csv("DATA/20250702_QuPath_OutputImageMeasurements.csv")
+height_data = read.csv("DATA/heights.csv")
 
 Measurements_data$Animal <- gsub(".*_(\\d+)_(\\d+)[A-Z]*_.*", "\\1\\2", Measurements_data$Image)
 
@@ -124,4 +125,19 @@ marker_counts <- Detections_filtered_data %>%
     .groups = "drop"
   )
 
+```
+
+```{r}
+height_data <- height_data %>%
+  mutate(
+    Animal = str_match(Image, "pilot_(\\d+)_([0-9]+)")[,2:3] %>% apply(1, paste0, collapse = ""),
+    slice = str_match(Image, "s(\\d+)")[,2],
+    hemisphere = str_match(Image, "h(\\d+)")[,2],
+    slice = as.integer(slice),
+    hemisphere = as.integer(hemisphere)
+    )
+
+
+summary_data <- height_data %>%
+  left_join(Detections_summary, by = c("Animal", "slice", "hemisphere"))
 ```
