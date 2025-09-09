@@ -38,16 +38,26 @@ Measurements_data$genotype <- sub(".*_(WT|KO)_.*", "\\1", Measurements_data$Imag
 # Filter out the specific row by exact match
 Measurements_filtered_data <- Measurements_data[Measurements_data$Image != "MAX_20250715_CTNND2_oligo_juvenile_pilot_55194_8M_WT_s1h1_ASPA488_Pdgfra594_Olig2694_DAPI405_Merged.tif_rotated.tif", ]
 
+
+write.csv(Measurements_filtered_data, "Measurements_filtered_data.csv", row.names = FALSE)
+
+
 ```
 
 ```{r}
 library(tidyverse)
 library(stringr)
 
+library(tidyverse)
+
 # Load CSV
+library(dplyr)
+library(stringr)
+library(tidyr)
+
 Detections_data <- read.csv("DATA/20250722_QuPath_OutputImageDetections.csv")
 
-# Extract animal ID, sex, and genotype
+# Extract metadata
 Detections_data <- Detections_data %>%
   mutate(
     Animal = gsub(".*_(\\d+)_(\\d+)[A-Z]*_.*", "\\1\\2", Image),
@@ -55,31 +65,63 @@ Detections_data <- Detections_data %>%
     genotype = sub(".*_(WT|KO)_.*", "\\1", Image),
     slice = str_extract(Image, "s\\d+") %>% str_remove("s") %>% as.integer(),
     hemisphere = str_extract(Image, "h\\d+") %>% str_remove("h") %>% as.integer(),
-    Pdgfra = str_extract(Classification, "Pdgfra[+-]") %>% str_sub(-1),
-    ASPA = str_extract(Classification, "ASPA[+-]") %>% str_sub(-1)
+    Pdgfra_status = str_extract(Classification, "Pdgfra[+-]") %>% str_sub(-1),
+    ASPA_status = str_extract(Classification, "ASPA[+-]") %>% str_sub(-1)
   )
 
-# Filter for rows containing "NEWSETTINGS" in Image
+# Filter for "NEWSETTINGS"
 Detections_filtered_data <- Detections_data %>%
   filter(str_detect(Image, "NEWSETTINGS"))
 
-# Count combinations of Pdgfra and ASPA per slice, hemisphere, and Animal
-Detections_summary <- Detections_filtered_data %>%
+
+# Classify marker combinations
+Detections_filtered_data <- Detections_filtered_data %>%
   mutate(
     combo = case_when(
-      Pdgfra == "+" & ASPA == "+" ~ "Pdgfra_plus_ASPA_plus",
-      Pdgfra == "+" & ASPA == "-" ~ "Pdgfra_plus_ASPA_minus",
-      Pdgfra == "-" & ASPA == "+" ~ "Pdgfra_minus_ASPA_plus",
-      Pdgfra == "-" & ASPA == "-" ~ "Pdgfra_minus_ASPA_minus"
+      Pdgfra_status == "+" & ASPA_status == "+" ~ "Pdgfra_plus_ASPA_plus",
+      Pdgfra_status == "+" & ASPA_status == "-" ~ "Pdgfra_plus_ASPA_minus",
+      Pdgfra_status == "-" & ASPA_status == "+" ~ "Pdgfra_minus_ASPA_plus",
+      Pdgfra_status == "-" & ASPA_status == "-" ~ "Pdgfra_minus_ASPA_minus"
     )
-  ) %>%
+  )
+
+# Count combinations per animal/slice/hemisphere
+Detections_summary <- Detections_filtered_data %>%
   group_by(slice, hemisphere, Animal, sex, genotype, combo) %>%
   summarise(n = n(), .groups = "drop") %>%
-  pivot_wider(names_from = combo, values_from = n, values_fill = 0)
+  pivot_wider(names_from = combo, values_from = n, values_fill = 0) %>%
+  mutate(
+    Num.Detections = Pdgfra_plus_ASPA_plus +
+                     Pdgfra_plus_ASPA_minus +
+                     Pdgfra_minus_ASPA_plus +
+                     Pdgfra_minus_ASPA_minus,
+                     
+    Pdgfra = Pdgfra_plus_ASPA_plus + Pdgfra_plus_ASPA_minus,
+    ASPA   = Pdgfra_plus_ASPA_plus + Pdgfra_minus_ASPA_plus,
 
+    PropASPApos_Pdgfrapos = Pdgfra_plus_ASPA_plus / Num.Detections,
+    PropASPApos_Pdgfraneg = Pdgfra_minus_ASPA_plus / Num.Detections,
+    PropASPAneg_Pdgfrapos = Pdgfra_plus_ASPA_minus / Num.Detections,
+    PropASPAneg_Pdgfraneg = Pdgfra_minus_ASPA_minus / Num.Detections,
+
+    PropASPA = ASPA / Num.Detections,
+    PropPdgfra = Pdgfra / Num.Detections
+  )
+
+
+# Write to CSV
+write.csv(Detections_summary, "Detections_summary.csv", row.names = FALSE)
 
 ```
 
 ```{r}
+
+marker_counts <- Detections_filtered_data %>%
+  group_by(slice, hemisphere) %>%
+  summarise(
+    Total_Pdgfra_pos = sum(Pdgfra_status == "+"),
+    Total_ASPA_pos = sum(ASPA_status == "+"),
+    .groups = "drop"
+  )
 
 ```
